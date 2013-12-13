@@ -17,6 +17,10 @@
 package com.jonathanhester.cast_show;
 
 import java.io.IOException;
+import java.util.ArrayList;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import android.os.Bundle;
 import android.support.v4.app.FragmentActivity;
@@ -42,6 +46,7 @@ import com.google.cast.MediaProtocolMessageStream;
 import com.google.cast.MediaRouteAdapter;
 import com.google.cast.MediaRouteHelper;
 import com.google.cast.MediaRouteStateChangeListener;
+import com.google.cast.MessageStream;
 import com.google.cast.SessionError;
 
 
@@ -71,6 +76,7 @@ public class CastShowActivity extends FragmentActivity implements MediaRouteAdap
     private ContentMetadata mMetaData;
     private ApplicationSession mSession;
     private MediaProtocolMessageStream mMessageStream;
+    private CastShowMessageStream mCommandsMessageStream;
     private MediaRouteButton mMediaRouteButton;
     private MediaRouter mMediaRouter;
     private MediaRouteSelector mMediaRouteSelector;
@@ -226,35 +232,7 @@ public class CastShowActivity extends FragmentActivity implements MediaRouteAdap
      * @param playState indicates that Play was clicked if true, and Pause was clicked if false
      */
     public void onPlayClicked(boolean playState) {
-        if (playState) {
-            try {
-                if (mMessageStream != null) {
-                    mMessageStream.stop();
-                } else {
-                    Log.e(TAG, "onClick-Play - mMPMS==null");
-                }
-            } catch (IOException e) {
-                Log.e(TAG, "Failed to send stop comamnd.");
-            }
-            mPlayPauseButton.setImageResource(R.drawable.play_button);
-        } else {
-            try {
-                if (mMessageStream != null) {
-                    if (mVideoIsStopped) {
-                        mMessageStream.play();
-                        mVideoIsStopped = !mVideoIsStopped;
-                    } else {
-                        mMessageStream.resume();
-                    }
-                } else {
-                    Log.e(TAG, "onClick-Play - mMPMS==null");
-                }
-            } catch (IOException e) {
-                Log.e(TAG, "Failed to send play/resume comamnd.");
-            }
-            mPlayPauseButton.setImageResource(R.drawable.pause_button);
-        }
-        mPlayButtonShowsPlay = !mPlayButtonShowsPlay;
+    	startSlideShow();
     }
 
     @Override
@@ -427,17 +405,8 @@ public class CastShowActivity extends FragmentActivity implements MediaRouteAdap
                     return;
                 }
                 logVIfEnabled(TAG, "Creating and attaching Message Stream");
-                mMessageStream = new MediaProtocolMessageStream();
-                channel.attachMessageStream(mMessageStream);
-
-                if (mMessageStream.getPlayerState() == null) {
-                    if (mMedia != null) {
-                        loadMedia();
-                    }
-                } else {
-                    logVIfEnabled(TAG, "Found player already running; updating status");
-                    updateStatus();
-                }
+                mCommandsMessageStream = new CastShowMessageStream();
+                channel.attachMessageStream(mCommandsMessageStream);
             }
 
             @Override
@@ -464,6 +433,13 @@ public class CastShowActivity extends FragmentActivity implements MediaRouteAdap
         } catch (IOException e) {
             Log.e(TAG, "Failed to open session", e);
         }
+    }
+    
+    protected void startSlideShow() {
+        ArrayList<String> images = new ArrayList<String>();
+        images.add("http://jonathanhester.com/1920x1080-famous-paintings-sunday-afternoon-hd-widescreen-high-definition-wallpaper.jpg");
+        images.add("http://www.frozy.net/wp-content/uploads/2012/07/Yosemite-Valley-snow.jpg");
+        mCommandsMessageStream.sendPlaySlideshow(images);
     }
 
     /**
@@ -599,5 +575,28 @@ public class CastShowActivity extends FragmentActivity implements MediaRouteAdap
         if(ENABLE_LOGV){
             Log.v(tag, message);
         }
+    }
+    
+    private class CastShowMessageStream extends MessageStream {
+    	CastShowMessageStream() {
+    		super("HelloWorld");
+    	}
+    	
+    	@Override
+    	public void onMessageReceived(JSONObject arg0) {
+    		// TODO Auto-generated method stub
+    		
+    	}
+    	
+    	public void sendPlaySlideshow(ArrayList<String> images) {
+    		JSONObject message = new JSONObject();
+    		try {
+    			message.put("type", "queue");
+    			message.put("images", new JSONArray(images));
+    			sendMessage(message);
+    		} catch (Exception e) {
+    			
+    		}    		
+    	}
     }
 }
