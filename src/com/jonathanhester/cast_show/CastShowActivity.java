@@ -464,7 +464,7 @@ public class CastShowActivity extends FragmentActivity implements
 	 */
 	protected void loadMedia() {
 		mMetaData.setTitle(mMedia.getTitle());
-		int delay = mNumSeconds.getValue();
+		int delay = mNumSeconds.getValue() * 30000;
 		mCommandsMessageStream.sendPlaySlideshow(mMedia.getUrls(), delay);
 	}
 

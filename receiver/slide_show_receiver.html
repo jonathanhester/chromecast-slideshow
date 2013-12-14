@@ -4,6 +4,7 @@
 <script
 	src="https://www.gstatic.com/cast/js/receiver/1.0/cast_receiver.js"></script>
 <script src="galleria-1.3.3.min.js"></script>
+<script src="slide_show.js"></script>
 <style>
 .galleria-stage {
 	position: absolute;
@@ -16,7 +17,7 @@
 
 .messages {
 	color: #FF0000;
-	text-align:center;
+	text-align: center;
 	padding-top: 200px;
 }
 </style>
@@ -26,91 +27,24 @@
 		<h1>Ready...Select a slideshow</h1>
 	</div>
 	<div class="galleria" style="width: 100%; height: 100%"></div>
+
+	<script>
+	function test() {
+		var images = [
+						"http://jonathanhester.com/1920x1080-famous-paintings-sunday-afternoon-hd-widescreen-high-definition-wallpaper.jpg",
+						"http://www.frozy.net/wp-content/uploads/2012/07/Yosemite-Valley-snow.jpg",
+						"http://www.venusbuzz.com/wp-content/uploads/48_web32.jpeg",
+						"http://www.hdwallpaperscool.com/wp-content/uploads/2013/11/mountain-nature-hd-wallpapers-top-beautiful-desktop-nature-images-background.jpg" ];
+				onMessage({message: {type: "queue", images: images, delay: 1000 }});
+		
+	}
+	function next() { onMessage({message: {type: "next"}}); }
+	function prev() { onMessage({message: {type: "previous"}}); }
+	$(function() {
+		//test();
+	});
+	</script>
 </body>
 
-<script>
-	$(function() {
-		var delay;
-		var galleria;
-
-		Galleria.ready(function() {
-			galleria = this;
-			galleria.enterFullscreen();
-		});
-
-		Galleria.loadTheme('galleria.classic.min.js');
-
-		var receiver = new cast.receiver.Receiver(
-				'bc28e054-e01e-474f-a798-d73f6e62688b', [ 'HelloWorld' ], "", 5), channelHandler = new cast.receiver.ChannelHandler(
-				'HelloWorld'), $messages = $('.messages'), $body = $('body');
-
-		channelHandler.addChannelFactory(receiver
-				.createChannelFactory('HelloWorld'));
-
-		receiver.start();
-
-		channelHandler.addEventListener(
-				cast.receiver.Channel.EventType.MESSAGE, onMessage.bind(this));
-
-		function onMessage(event) {
-			console.log(event.message);
-			delay = event.message.delay;
-			if (event.message.type == "queue") {
-				play(event.message.images);
-			} else if (galleria) {
-				if (event.message.type == "pause") {
-					galleria.pause();
-				} else if (event.message.type == "play") {
-					galleria.play(delay);
-				} else if (event.message.type == "previous") {
-					galleria.prev();
-					galleria.setPlaytime(delay);
-				} else if (event.message.type == "next") {
-					galleria.next();
-					galleria.setPlaytime(delay);
-				}
-
-			}
-		}
-
-		function queueImage(image) {
-			var img = $('<img >'); //Equivalent: $(document.createElement('img'))
-			img.attr('src', image);
-			img.appendTo('.galleria');
-		}
-
-		function clearImages() {
-
-		}
-
-		function play(images) {
-			var data = [];
-			$.each(images, function(i, image) {
-				data.push({
-					thumb : image,
-					image : image,
-					big : image
-				})
-			});
-			Galleria.configure({
-				autoplay : delay,
-				showImagenav : false,
-				thumbnails : false,
-				transition : 'fade',
-				fullscreenCrop : false,
-				transitionSpeed : 1000
-			});
-			$(".messages").hide();
-			Galleria.run('.galleria', {
-				dataSource : data
-			});
-
-			Galleria.on('progress', function(e) {
-			});
-
-		}
-		window.onMessage = onMessage;
-	});
-</script>
 
 </html>
