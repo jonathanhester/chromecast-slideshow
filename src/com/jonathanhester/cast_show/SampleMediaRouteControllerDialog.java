@@ -71,16 +71,5 @@ public class SampleMediaRouteControllerDialog extends MediaRouteControllerDialog
      */
     @Override
     public void onClick(View view) {
-        switch (view.getId()) {
-            case R.id.skip_back_button:
-                mActivity.onSeekClicked(SEEK_BACK);
-                break;
-            case R.id.mute_button:
-                mActivity.onMuteClicked();
-                break;
-            case R.id.skip_forward_button:
-                mActivity.onSeekClicked(SEEK_FORWARD);
-                break;
-        }
     }
 }

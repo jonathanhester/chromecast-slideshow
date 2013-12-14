@@ -16,27 +16,29 @@
 
 package com.jonathanhester.cast_show;
 
+import java.util.ArrayList;
+
 /**
  * A storage class containing the title and URL of a piece of playable media.
  */
 public class CastMedia {
 
     private String mTitle;
-    private String mVideoUrl;
+    private ArrayList<String> mImageUrls;
 
     /**
      * Creates a new CastMedia object for the media with the given title and URL.
      */
-    public CastMedia(String title, String videoUrl) {
+    public CastMedia(String title, ArrayList<String> imageUrls) {
         mTitle = title;
-        mVideoUrl = videoUrl;
+        mImageUrls = imageUrls;
     }
 
     public String getTitle() {
         return mTitle;
     }
 
-    public String getUrl() {
-        return mVideoUrl;
+    public ArrayList<String> getUrls() {
+        return mImageUrls;
     }
 }

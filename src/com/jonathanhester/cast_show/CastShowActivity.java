@@ -19,6 +19,7 @@ package com.jonathanhester.cast_show;
 import java.io.IOException;
 import java.util.ArrayList;
 
+import org.apache.http.Header;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -33,6 +34,7 @@ import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.widget.ImageButton;
+import android.widget.NumberPicker;
 import android.widget.TextView;
 
 import com.google.cast.ApplicationChannel;
@@ -42,561 +44,597 @@ import com.google.cast.CastContext;
 import com.google.cast.CastDevice;
 import com.google.cast.ContentMetadata;
 import com.google.cast.MediaProtocolCommand;
-import com.google.cast.MediaProtocolMessageStream;
 import com.google.cast.MediaRouteAdapter;
 import com.google.cast.MediaRouteHelper;
 import com.google.cast.MediaRouteStateChangeListener;
 import com.google.cast.MessageStream;
 import com.google.cast.SessionError;
-
-
+import com.loopj.android.http.AsyncHttpClient;
+import com.loopj.android.http.JsonHttpResponseHandler;
 
 /***
- * An activity that plays a chosen sample video on a Cast device and exposes playback and volume
- * controls in the UI.
+ * An activity that plays a chosen sample video on a Cast device and exposes
+ * playback and volume controls in the UI.
  */
-public class CastShowActivity extends FragmentActivity implements MediaRouteAdapter {
+public class CastShowActivity extends FragmentActivity implements
+		MediaRouteAdapter {
 
-    private static final String TAG = CastShowActivity.class.getSimpleName();
-    
-    public static final boolean ENABLE_LOGV = true;
+	private static final String TAG = CastShowActivity.class.getSimpleName();
 
-    protected static final double MAX_VOLUME_LEVEL = 20;
-    private static final double VOLUME_INCREMENT = 0.05;
-    private static final int SEEK_FORWARD = 1;
-    private static final int SEEK_BACK = 2;
-    private static final int SEEK_INCREMENT = 10;
+	public static final boolean ENABLE_LOGV = true;
 
-    private boolean mPlayButtonShowsPlay = false;
-    private boolean mVideoIsStopped = false;
+	protected static final double MAX_VOLUME_LEVEL = 20;
+	private static final double VOLUME_INCREMENT = 0.05;
+	private static final int SEEK_FORWARD = 1;
+	private static final int SEEK_BACK = 2;
+	private static final int SEEK_INCREMENT = 10;
 
-    private CastContext mCastContext = null;
-    private CastDevice mSelectedDevice;
-    private CastMedia mMedia;
-    private ContentMetadata mMetaData;
-    private ApplicationSession mSession;
-    private MediaProtocolMessageStream mMessageStream;
-    private CastShowMessageStream mCommandsMessageStream;
-    private MediaRouteButton mMediaRouteButton;
-    private MediaRouter mMediaRouter;
-    private MediaRouteSelector mMediaRouteSelector;
-    private MediaRouter.Callback mMediaRouterCallback;
-    private MediaSelectionDialog mMediaSelectionDialog;
-    private MediaProtocolCommand mStatus;
+	private boolean mPlayButtonShowsPlay = false;
+	private boolean mVideoIsStopped = false;
 
-    private ImageButton mPlayPauseButton;
-    private ImageButton mStopButton;
-    private TextView mStatusText;
-    private TextView mCurrentlyPlaying;
-    private String mCurrentItemId;
-    private RouteInfo mCurrentRoute;
+	private CastContext mCastContext = null;
+	private CastDevice mSelectedDevice;
+	private CastMedia mMedia;
+	private ContentMetadata mMetaData;
+	private ApplicationSession mSession;
+	private CastShowMessageStream mCommandsMessageStream;
+	private MediaRouteButton mMediaRouteButton;
+	private MediaRouter mMediaRouter;
+	private MediaRouteSelector mMediaRouteSelector;
+	private MediaRouter.Callback mMediaRouterCallback;
+	private MediaSelectionDialog mMediaSelectionDialog;
+	private MediaProtocolCommand mStatus;
 
-    private SampleMediaRouteDialogFactory mDialogFactory;
+	private ImageButton mPlayPauseButton;
+	private ImageButton mPreviousButton;
+	private ImageButton mNextButton;
+	private TextView mStatusText;
+	private TextView mCurrentlyPlaying;
+	private String mCurrentItemId;
+	private RouteInfo mCurrentRoute;
+	private NumberPicker mNumSeconds;
 
-    /**
-     * Initializes MediaRouter information and prepares for Cast device detection upon creating
-     * this activity.
-     */
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        logVIfEnabled(TAG, "onCreate called");
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_cast_sample);
+	private SampleMediaRouteDialogFactory mDialogFactory;
 
-        mCastContext = new CastContext(getApplicationContext());
-        mMedia = new CastMedia(null, null);
-        mMetaData = new ContentMetadata();
+	/**
+	 * Initializes MediaRouter information and prepares for Cast device
+	 * detection upon creating this activity.
+	 */
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		logVIfEnabled(TAG, "onCreate called");
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.activity_cast_sample);
 
-        mDialogFactory = new SampleMediaRouteDialogFactory();
+		mCastContext = new CastContext(getApplicationContext());
+		mMedia = new CastMedia(null, null);
+		mMetaData = new ContentMetadata();
 
-        MediaRouteHelper.registerMinimalMediaRouteProvider(mCastContext, this);
-        mMediaRouter = MediaRouter.getInstance(getApplicationContext());
-        mMediaRouteSelector = MediaRouteHelper
-                .buildMediaRouteSelector(MediaRouteHelper.CATEGORY_CAST,
-                        getResources().getString(R.string.app_id), null);
+		mDialogFactory = new SampleMediaRouteDialogFactory();
 
-        mMediaRouteButton = (MediaRouteButton) findViewById(R.id.media_route_button);
-        mMediaRouteButton.setRouteSelector(mMediaRouteSelector);
-        mMediaRouteButton.setDialogFactory(mDialogFactory);
-        mMediaRouterCallback = new MyMediaRouterCallback();
+		MediaRouteHelper.registerMinimalMediaRouteProvider(mCastContext, this);
+		mMediaRouter = MediaRouter.getInstance(getApplicationContext());
+		mMediaRouteSelector = MediaRouteHelper.buildMediaRouteSelector(
+				MediaRouteHelper.CATEGORY_CAST,
+				getResources().getString(R.string.app_id), null);
 
-        mStatusText = (TextView) findViewById(R.id.play_status_text);
-        mCurrentlyPlaying = (TextView) findViewById(R.id.currently_playing);
-        mCurrentlyPlaying.setText(getString(R.string.tap_to_select));
-        mMediaSelectionDialog = new MediaSelectionDialog(this);
+		mMediaRouteButton = (MediaRouteButton) findViewById(R.id.media_route_button);
+		mMediaRouteButton.setRouteSelector(mMediaRouteSelector);
+		mMediaRouteButton.setDialogFactory(mDialogFactory);
+		mMediaRouterCallback = new MyMediaRouterCallback();
 
-        mPlayPauseButton = (ImageButton) findViewById(R.id.play_pause_button);
-        mStopButton = (ImageButton) findViewById(R.id.stop_button);
-        initButtons();
+		mStatusText = (TextView) findViewById(R.id.play_status_text);
+		mCurrentlyPlaying = (TextView) findViewById(R.id.currently_playing);
+		mCurrentlyPlaying.setText(getString(R.string.tap_to_select));
+		mMediaSelectionDialog = new MediaSelectionDialog(this);
 
-        Thread myThread = null;
-        Runnable runnable = new StatusRunner();
-        myThread = new Thread(runnable);
-        logVIfEnabled(TAG, "Starting statusRunner thread");
-        myThread.start();
-    }
+		mPlayPauseButton = (ImageButton) findViewById(R.id.play_pause_button);
+		mPreviousButton = (ImageButton) findViewById(R.id.previous_button);
+		mNextButton = (ImageButton) findViewById(R.id.next_button);
+		initButtons();
 
-    /**
-     * Initializes all buttons by adding user controls and listeners.
-     */
-    public void initButtons() {
-        mPlayPauseButton.setEnabled(false);
-        mPlayPauseButton.setImageResource(R.drawable.pause_button);
-        mPlayPauseButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                onPlayClicked(!mPlayButtonShowsPlay);
-            }
-        });
-        mStopButton.setEnabled(false);
-        mStopButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                onStopClicked();
-            }
-        });
-        mCurrentlyPlaying.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                logVIfEnabled(TAG, "Selecting Media");
-                mMediaSelectionDialog.setTitle(getResources().getString(
-                        R.string.medial_dialog_title));
-                mMediaSelectionDialog.show();
-            }
-        });
-    }
+		mNumSeconds = (NumberPicker) findViewById(R.id.number_picker);
+		mNumSeconds.setMaxValue(10);
+		mNumSeconds.setMinValue(1);
+		String[] nums = new String[10];
+		for (int i = 0; i < nums.length; i++)
+			nums[i] = Integer.toString((i + 1) * 30);
+		mNumSeconds.setDisplayedValues(nums);
 
-    /**
-     * Skips forward or backward by some fixed increment in the currently playing media.
-     * @param direction an integer corresponding to either SEEK_FORWARD or SEEK_BACK
-     */
-    public void onSeekClicked(int direction) {
-        try {
-            if (mMessageStream != null) {
-                double cPosition = mMessageStream.getStreamPosition();
-                if (direction == SEEK_FORWARD) {
-                    mMessageStream.playFrom(cPosition + SEEK_INCREMENT);
-                } else if (direction == SEEK_BACK) {
-                    mMessageStream.playFrom(cPosition - SEEK_INCREMENT);
-                } else {
-                    Log.e(TAG, "onSeekClicked was not FWD or BACK");
-                }
-            } else {
-                Log.e(TAG, "onSeekClicked - mMPMS==null");
-            }
-        } catch (IOException e) {
-            Log.e(TAG, "Failed to send pause comamnd.");
-        }
-    }
+		loadShows();
 
-    /**
-     * Handles stopping the currently playing media upon the stop button being pressed.
-     */
-    public void onStopClicked() {
-        try {
-            if (mMessageStream != null) {
-                mMessageStream.stop();
-                mVideoIsStopped = !mVideoIsStopped;
-                mPlayPauseButton.setImageResource(R.drawable.play_button);
-                mPlayButtonShowsPlay = true;
-            } else {
-                Log.e(TAG, "onStopClicked - mMPMS==null");
-            }
-        } catch (IOException e) {
-            Log.e(TAG, "Failed to send pause comamnd.");
-        }
-    }
+		Thread myThread = null;
+		Runnable runnable = new StatusRunner();
+		myThread = new Thread(runnable);
+		logVIfEnabled(TAG, "Starting statusRunner thread");
+		myThread.start();
+	}
 
-    /**
-     * Mutes the currently playing media when the mute button is pressed.
-     */
-    public void onMuteClicked() {
-        try {
-            if (mMessageStream != null) {
-                if (mMessageStream.isMuted()) {
-                    mMessageStream.setMuted(false);
-                } else {
-                    mMessageStream.setMuted(true);
-                }
-            } else {
-                Log.e(TAG, "onMutedClicked - mMPMS==null");
-            }
-        } catch (IOException e) {
-            Log.e(TAG, "Failed to send pause comamnd.");
-        }
-    }
+	/**
+	 * Initializes all buttons by adding user controls and listeners.
+	 */
+	public void initButtons() {
+		mPlayPauseButton.setEnabled(false);
+		mPlayPauseButton.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				onPlayClicked(!mPlayButtonShowsPlay);
+			}
+		});
+		mPreviousButton.setEnabled(false);
+		mPreviousButton.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				onPreviousClicked();
+			}
+		});
+		mNextButton.setEnabled(false);
+		mNextButton.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				onNextClicked();
+			}
+		});
+		mCurrentlyPlaying.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				logVIfEnabled(TAG, "Selecting Media");
+				mMediaSelectionDialog.setTitle(getResources().getString(
+						R.string.medial_dialog_title));
+				loadShows();
+				mMediaSelectionDialog.show();
+			}
+		});
+	}
 
-    /**
-     * Plays or pauses the currently loaded media, depending on the current state of the <code>
-     * mPlayPauseButton</code>.
-     * @param playState indicates that Play was clicked if true, and Pause was clicked if false
-     */
-    public void onPlayClicked(boolean playState) {
-    	startSlideShow();
-    }
+	public void onPreviousClicked() {
+		if (mCommandsMessageStream != null) {
+			mCommandsMessageStream.previous();
+		} else {
+			Log.e(TAG, "onStopClicked - mMPMS==null");
+		}
+	}
 
-    @Override
-    public void onDeviceAvailable(CastDevice device, String myString,
-            MediaRouteStateChangeListener listener) {
-        mSelectedDevice = device;
-        logVIfEnabled(TAG, "Available device found: " + myString);
-        openSession();
-    }
+	public void onNextClicked() {
+		if (mCommandsMessageStream != null) {
+			mCommandsMessageStream.next();
+		} else {
+			Log.e(TAG, "onStopClicked - mMPMS==null");
+		}
+	}
 
-    @Override
-    public void onSetVolume(double volume) {
-        try {
-            mMessageStream.setVolume(volume);
-        } catch (IllegalStateException e) {
-            Log.e(TAG, "Problem sending Set Volume", e);
-        } catch (IOException e) {
-            Log.e(TAG, "Problem sending Set Volume", e);
-        }
-    }
+	/**
+	 * Plays or pauses the currently loaded media, depending on the current
+	 * state of the <code>
+	 * mPlayPauseButton</code>.
+	 * 
+	 * @param playState
+	 *            indicates that Play was clicked if true, and Pause was clicked
+	 *            if false
+	 */
+	public void onPlayClicked(boolean playState) {
+		if (playState) {
+			if (mCommandsMessageStream != null) {
+				mCommandsMessageStream.play();
+				mPlayButtonShowsPlay = true;
+			} else {
+				Log.e(TAG, "onClick-Play - mMPMS==null");
+			}
+			mPlayPauseButton
+					.setImageResource(android.R.drawable.ic_media_pause);
 
-    @Override
-    public void onUpdateVolume(double volumeChange) {
-        try {
-            if ((mCurrentItemId != null) && (mCurrentRoute != null)) {
-                mCurrentRoute.requestUpdateVolume((int) (volumeChange * MAX_VOLUME_LEVEL));
-            }
-        } catch (IllegalStateException e) {
-            Log.e(TAG, "Problem sending Update Volume", e);
-        }
-    }
+		} else {
+			if (mCommandsMessageStream != null) {
+				mCommandsMessageStream.pause();
+				mPlayButtonShowsPlay = false;
+			} else {
+				Log.e(TAG, "onClick-Play - mMPMS==null");
+			}
+			mPlayPauseButton.setImageResource(android.R.drawable.ic_media_play);
 
-    /**
-     * Processes volume up and volume down actions upon receiving them as key events.
-     */
-    @Override
-    public boolean dispatchKeyEvent(KeyEvent event) {
-        int action = event.getAction();
-        int keyCode = event.getKeyCode();
-        switch (keyCode) {
-            case KeyEvent.KEYCODE_VOLUME_UP:
-                if (action == KeyEvent.ACTION_DOWN) {
-                    double currentVolume;
-                    if (mMessageStream != null) {
-                        currentVolume = mMessageStream.getVolume();
-                        logVIfEnabled(TAG, "Volume up from " + currentVolume);
-                        if (currentVolume < 1.0) {
-                            logVIfEnabled(TAG, "New volume: " + (currentVolume + VOLUME_INCREMENT));
-                            onSetVolume(currentVolume + VOLUME_INCREMENT);
-                        }
-                    } else {
-                        Log.e(TAG, "dispatchKeyEvent - volume up - mMPMS==null");
-                    }
-                }
+		}
+	}
 
-                return true;
-            case KeyEvent.KEYCODE_VOLUME_DOWN:
-                if (action == KeyEvent.ACTION_DOWN) {
-                    double currentVolume;
-                    if (mMessageStream != null) {
-                        currentVolume = mMessageStream.getVolume();
-                        logVIfEnabled(TAG, "Volume down from: " + currentVolume);
-                        if (currentVolume > 0.0) {
-                            logVIfEnabled(TAG, "New volume: " + (currentVolume - VOLUME_INCREMENT));
-                            onSetVolume(currentVolume - VOLUME_INCREMENT);
-                        }
-                    } else {
-                        Log.e(TAG, "dispatchKeyEvent - volume down - mMPMS==null");
-                    }
-                }
-                return true;
-            default:
-                return super.dispatchKeyEvent(event);
-        }
-    }
+	@Override
+	public void onDeviceAvailable(CastDevice device, String myString,
+			MediaRouteStateChangeListener listener) {
+		mSelectedDevice = device;
+		logVIfEnabled(TAG, "Available device found: " + myString);
+		openSession();
+	}
 
-    @Override
-    protected void onStart() {
-        super.onStart();
-        mMediaRouter.addCallback(mMediaRouteSelector, mMediaRouterCallback,
-                MediaRouter.CALLBACK_FLAG_REQUEST_DISCOVERY);
-        logVIfEnabled(TAG, "onStart called and callback added");
-    }
+	@Override
+	public void onSetVolume(double volume) {
+	}
 
-    /**
-     * Closes a running session upon destruction of this Activity.
-     */
-    @Override
-    protected void onStop() {
-        mMediaRouter.removeCallback(mMediaRouterCallback);
-        super.onStop();
-        logVIfEnabled(TAG, "onStop called and callback removed");
-    }
+	@Override
+	public void onUpdateVolume(double volumeChange) {
+		try {
+			if ((mCurrentItemId != null) && (mCurrentRoute != null)) {
+				mCurrentRoute
+						.requestUpdateVolume((int) (volumeChange * MAX_VOLUME_LEVEL));
+			}
+		} catch (IllegalStateException e) {
+			Log.e(TAG, "Problem sending Update Volume", e);
+		}
+	}
 
-    @Override
-    protected void onDestroy() {
-        logVIfEnabled(TAG, "onDestroy called, ending session if session exists");
-        if (mSession != null) {
-            try {
-                if (!mSession.hasStopped()) {
-                    mSession.endSession();
-                }
-            } catch (IOException e) {
-                Log.e(TAG, "Failed to end session.");
-            }
-        }
-        mSession = null;
-        super.onDestroy();
-    }
+	/**
+	 * Processes volume up and volume down actions upon receiving them as key
+	 * events.
+	 */
+	@Override
+	public boolean dispatchKeyEvent(KeyEvent event) {
+		int action = event.getAction();
+		int keyCode = event.getKeyCode();
+		switch (keyCode) {
+		case KeyEvent.KEYCODE_VOLUME_UP:
+			if (action == KeyEvent.ACTION_DOWN) {
+				double currentVolume;
+			}
 
-    /**
-     * A callback class which listens for route select or unselect events and processes devices
-     * and sessions accordingly.
-     */   
-    private class MyMediaRouterCallback extends MediaRouter.Callback {
-        @Override
-        public void onRouteSelected(MediaRouter router, RouteInfo route) {
-            MediaRouteHelper.requestCastDeviceForRoute(route);
-        }
+			return true;
+		case KeyEvent.KEYCODE_VOLUME_DOWN:
+			if (action == KeyEvent.ACTION_DOWN) {
+				double currentVolume;
+			}
+			return true;
+		default:
+			return super.dispatchKeyEvent(event);
+		}
+	}
 
-        @Override
-        public void onRouteUnselected(MediaRouter router, RouteInfo route) {
-            try {
-                if (mSession != null) {
-                    logVIfEnabled(TAG, "Ending session and stopping application");
-                    mSession.setStopApplicationWhenEnding(true);
-                    mSession.endSession();
-                } else {
-                    Log.e(TAG, "onRouteUnselected: mSession is null");
-                }
-            } catch (IllegalStateException e) {
-                Log.e(TAG, "onRouteUnselected:");
-                e.printStackTrace();
-            } catch (IOException e) {
-                Log.e(TAG, "onRouteUnselected:");
-                e.printStackTrace();
-            }
-            mMessageStream = null;
-            mSelectedDevice = null;
-        }
-    }
+	@Override
+	protected void onStart() {
+		super.onStart();
+		mMediaRouter.addCallback(mMediaRouteSelector, mMediaRouterCallback,
+				MediaRouter.CALLBACK_FLAG_REQUEST_DISCOVERY);
+		logVIfEnabled(TAG, "onStart called and callback added");
+	}
 
-    /**
-     * Starts a new video playback session with the current CastContext and selected device.
-     */
-    private void openSession() {
-        mSession = new ApplicationSession(mCastContext, mSelectedDevice);
+	/**
+	 * Closes a running session upon destruction of this Activity.
+	 */
+	@Override
+	protected void onStop() {
+		mMediaRouter.removeCallback(mMediaRouterCallback);
+		super.onStop();
+		logVIfEnabled(TAG, "onStop called and callback removed");
+	}
 
-        // TODO: The below lines allow you to specify either that your application uses the default
-        // implementations of the Notification and Lock Screens, or that you will be using your own.
-        int flags = 0;
+	@Override
+	protected void onDestroy() {
+		logVIfEnabled(TAG, "onDestroy called, ending session if session exists");
+		if (mSession != null) {
+			try {
+				if (!mSession.hasStopped()) {
+					mSession.endSession();
+				}
+			} catch (IOException e) {
+				Log.e(TAG, "Failed to end session.");
+			}
+		}
+		mSession = null;
+		super.onDestroy();
+	}
 
-        // Comment out the below line if you are not writing your own Notification Screen.
-        // flags |= ApplicationSession.FLAG_DISABLE_NOTIFICATION;
+	private void loadShows() {
+		AsyncHttpClient client = new AsyncHttpClient();
+		client.get("http://jonathanhester.com/shows.json",
+				new JsonHttpResponseHandler() {
+					@Override
+					public void onSuccess(JSONObject response) {
+						ArrayList<CastMedia> shows = new ArrayList<CastMedia>();
+						try {
+							JSONArray arr = response.getJSONArray("shows");
+							JSONObject show;
 
-        // Comment out the below line if you are not writing your own Lock Screen.
-        // flags |= ApplicationSession.FLAG_DISABLE_LOCK_SCREEN_REMOTE_CONTROL;
-        mSession.setApplicationOptions(flags);
+							for (int i = 0; i < arr.length(); i++) {
+								show = arr.getJSONObject(i);
+								JSONArray imageArr = show
+										.getJSONArray("images");
+								ArrayList<String> images = new ArrayList<String>();
+								for (int j = 0; j < imageArr.length(); j++) {
+									images.add(imageArr.getString(j));
+								}
+								shows.add(new CastMedia(show.getString("name"),
+										images));
+							}
+						} catch (Exception e) {
+							Log.d("Exception", e.getMessage());
+						}
 
-        logVIfEnabled(TAG, "Beginning session with context: " + mCastContext);
-        logVIfEnabled(TAG, "The session to begin: " + mSession);
-        mSession.setListener(new com.google.cast.ApplicationSession.Listener() {
+						mMediaSelectionDialog.addShows(shows);
+					}
 
-            @Override
-            public void onSessionStarted(ApplicationMetadata appMetadata) {
-                logVIfEnabled(TAG, "Getting channel after session start");
-                ApplicationChannel channel = mSession.getChannel();
-                if (channel == null) {
-                    Log.e(TAG, "channel = null");
-                    return;
-                }
-                logVIfEnabled(TAG, "Creating and attaching Message Stream");
-                mCommandsMessageStream = new CastShowMessageStream();
-                channel.attachMessageStream(mCommandsMessageStream);
-            }
+					@Override
+					public void onFailure(int statusCode, Header[] headers,
+							String responseBody, Throwable e) {
+						// TODO Auto-generated method stub
+						super.onFailure(statusCode, headers, responseBody, e);
+					}
+				});
+	}
 
-            @Override
-            public void onSessionStartFailed(SessionError error) {
-                Log.e(TAG, "onStartFailed " + error);
-            }
+	/**
+	 * A callback class which listens for route select or unselect events and
+	 * processes devices and sessions accordingly.
+	 */
+	private class MyMediaRouterCallback extends MediaRouter.Callback {
+		@Override
+		public void onRouteSelected(MediaRouter router, RouteInfo route) {
+			MediaRouteHelper.requestCastDeviceForRoute(route);
+		}
 
-            @Override
-            public void onSessionEnded(SessionError error) {
-                Log.i(TAG, "onEnded " + error);
-            }
-        });
+		@Override
+		public void onRouteUnselected(MediaRouter router, RouteInfo route) {
+			try {
+				if (mSession != null) {
+					logVIfEnabled(TAG,
+							"Ending session and stopping application");
+					mSession.setStopApplicationWhenEnding(true);
+					mSession.endSession();
+				} else {
+					Log.e(TAG, "onRouteUnselected: mSession is null");
+				}
+			} catch (IllegalStateException e) {
+				Log.e(TAG, "onRouteUnselected:");
+				e.printStackTrace();
+			} catch (IOException e) {
+				Log.e(TAG, "onRouteUnselected:");
+				e.printStackTrace();
+			}
+			mCommandsMessageStream = null;
+			mSelectedDevice = null;
+		}
+	}
 
-        mPlayPauseButton.setEnabled(true);
-        mStopButton.setEnabled(true);
-        try {
-            logVIfEnabled(TAG, "Starting session with app name " + getString(R.string.app_name));
-            
-            // TODO: To run your own copy of the receiver, you will need to set app_name in 
-            // /res/strings.xml to your own appID, and then upload the provided receiver 
-            // to the url that you whitelisted for your app.
-            // The current value of app_name is "YOUR_APP_ID_HERE".
-            mSession.startSession(getString(R.string.app_id));
-        } catch (IOException e) {
-            Log.e(TAG, "Failed to open session", e);
-        }
-    }
-    
-    protected void startSlideShow() {
-        ArrayList<String> images = new ArrayList<String>();
-        images.add("http://jonathanhester.com/1920x1080-famous-paintings-sunday-afternoon-hd-widescreen-high-definition-wallpaper.jpg");
-        images.add("http://www.frozy.net/wp-content/uploads/2012/07/Yosemite-Valley-snow.jpg");
-        mCommandsMessageStream.sendPlaySlideshow(images);
-    }
+	/**
+	 * Starts a new video playback session with the current CastContext and
+	 * selected device.
+	 */
+	private void openSession() {
+		mSession = new ApplicationSession(mCastContext, mSelectedDevice);
 
-    /**
-     * Loads the stored media object and casts it to the currently selected device.
-     */
-    protected void loadMedia() {
-        logVIfEnabled(TAG, "Loading selected media on device");
-        mMetaData.setTitle(mMedia.getTitle());
-        try {
-            MediaProtocolCommand cmd = mMessageStream.loadMedia(mMedia.getUrl(), mMetaData, true);
-            cmd.setListener(new MediaProtocolCommand.Listener() {
+		// TODO: The below lines allow you to specify either that your
+		// application uses the default
+		// implementations of the Notification and Lock Screens, or that you
+		// will be using your own.
+		int flags = 0;
 
-                @Override
-                public void onCompleted(MediaProtocolCommand mPCommand) {
-                    logVIfEnabled(TAG, "Load completed - starting playback");
-                    mPlayPauseButton.setImageResource(R.drawable.pause_button);
-                    mPlayButtonShowsPlay = false;
-                    onSetVolume(0.5);
-                }
+		// Comment out the below line if you are not writing your own
+		// Notification Screen.
+		// flags |= ApplicationSession.FLAG_DISABLE_NOTIFICATION;
 
-                @Override
-                public void onCancelled(MediaProtocolCommand mPCommand) {
-                    logVIfEnabled(TAG, "Load cancelled");
-                }
-            });
+		// Comment out the below line if you are not writing your own Lock
+		// Screen.
+		// flags |= ApplicationSession.FLAG_DISABLE_LOCK_SCREEN_REMOTE_CONTROL;
+		mSession.setApplicationOptions(flags);
 
-        } catch (IllegalStateException e) {
-            Log.e(TAG, "Problem occurred with MediaProtocolCommand during loading", e);
-        } catch (IOException e) {
-            Log.e(TAG, "Problem opening MediaProtocolCommand during loading", e);
-        }
-    }
+		logVIfEnabled(TAG, "Beginning session with context: " + mCastContext);
+		logVIfEnabled(TAG, "The session to begin: " + mSession);
+		mSession.setListener(new com.google.cast.ApplicationSession.Listener() {
 
-    /**
-     * Stores and attempts to load the passed piece of media.
-     */
-    protected void mediaSelected(CastMedia media) {
-        this.mMedia = media;
-        updateCurrentlyPlaying();
-        if (mMessageStream != null) {
-            loadMedia();
-        }
-    }
+			@Override
+			public void onSessionStarted(ApplicationMetadata appMetadata) {
+				logVIfEnabled(TAG, "Getting channel after session start");
+				ApplicationChannel channel = mSession.getChannel();
+				if (channel == null) {
+					Log.e(TAG, "channel = null");
+					return;
+				}
+				logVIfEnabled(TAG, "Creating and attaching Message Stream");
+				mCommandsMessageStream = new CastShowMessageStream();
+				channel.attachMessageStream(mCommandsMessageStream);
+			}
 
-    /**
-     * Updates the status of the currently playing video in the dedicated message view.
-     */
-    public void updateStatus() {
-        this.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    setMediaRouteButtonVisible();
-                    updateCurrentlyPlaying();
+			@Override
+			public void onSessionStartFailed(SessionError error) {
+				Log.e(TAG, "onStartFailed " + error);
+			}
 
-                    if (mMessageStream != null) {
-                        mStatus = mMessageStream.requestStatus();
+			@Override
+			public void onSessionEnded(SessionError error) {
+				Log.i(TAG, "onEnded " + error);
+			}
+		});
 
-                        String currentStatus = "Player State: "
-                                + mMessageStream.getPlayerState() + "\n";
-                        currentStatus += "Device " + mSelectedDevice.getFriendlyName() + "\n";
-                        currentStatus += "Title " + mMessageStream.getTitle() + "\n";
-                        currentStatus += "Current Position: "
-                                + mMessageStream.getStreamPosition() + "\n";
-                        currentStatus += "Duration: "
-                                + mMessageStream.getStreamDuration() + "\n";
-                        currentStatus += "Volume set at: "
-                                + (mMessageStream.getVolume() * 100) + "%\n";
-                        currentStatus += "requestStatus: " + mStatus.getType() + "\n";
-                        mStatusText.setText(currentStatus);
-                    } else {
-                        mStatusText.setText(getResources().getString(R.string.tap_icon));
-                    }
-                } catch (Exception e) {
-                    Log.e(TAG, "Status request failed: " + e);
-                }
-            }
-        });
-    }
+		mPlayPauseButton.setEnabled(true);
+		mNextButton.setEnabled(true);
+		mPreviousButton.setEnabled(true);
+		try {
+			logVIfEnabled(TAG, "Starting session with app name "
+					+ getString(R.string.app_name));
 
-    /**
-     * Sets the Cast Device Selection button to visible or not, depending on the availability of
-     * devices.
-     */
-    protected final void setMediaRouteButtonVisible() {
-        mMediaRouteButton.setVisibility(
-                mMediaRouter.isRouteAvailable(mMediaRouteSelector, 0) ? View.VISIBLE : View.GONE);
-    }
+			// TODO: To run your own copy of the receiver, you will need to set
+			// app_name in
+			// /res/strings.xml to your own appID, and then upload the provided
+			// receiver
+			// to the url that you whitelisted for your app.
+			// The current value of app_name is "YOUR_APP_ID_HERE".
+			mSession.startSession(getString(R.string.app_id));
+		} catch (IOException e) {
+			Log.e(TAG, "Failed to open session", e);
+		}
+	}
 
-    /**
-     * Updates a view with the title of the currently playing media.
-     */
-    protected void updateCurrentlyPlaying() {
-        String playing = "";
-        if (mMedia.getTitle() != null) {
-            playing = "Media Selected: " + mMedia.getTitle();
-            if (mMessageStream != null) {
-                String colorString = "<br><font color=#0066FF>";
-                colorString += "Casting to " + mSelectedDevice.getFriendlyName();
-                colorString += "</font>";
-                playing += colorString;
-            }
-            mCurrentlyPlaying.setText(Html.fromHtml(playing));
-        } else {
-            String castString = "<font color=#FF0000>";
-            castString += getResources().getString(R.string.tap_to_select);
-            castString += "</font>";
-            mCurrentlyPlaying.setText(Html.fromHtml(castString));
-        }
-    }
+	/**
+	 * Loads the stored media object and casts it to the currently selected
+	 * device.
+	 */
+	protected void loadMedia() {
+		mMetaData.setTitle(mMedia.getTitle());
+		int delay = mNumSeconds.getValue();
+		mCommandsMessageStream.sendPlaySlideshow(mMedia.getUrls(), delay);
+	}
 
-    /**
-     * A Runnable class that updates a view to display status for the currently playing media.
-     */
-    private class StatusRunner implements Runnable {
-        @Override
-        public void run() {
-            while (!Thread.currentThread().isInterrupted()) {
-                try {
-                    updateStatus();
-                    Thread.sleep(1500);
-                } catch (Exception e) {
-                    Log.e(TAG, "Thread interrupted: " + e);
-                }
-            }
-        }
-    }
-    
-    /**
-     * Logs in verbose mode with the given tag and message, if the LOCAL_LOGV tag is set.
-     */
-    private void logVIfEnabled(String tag, String message){
-        if(ENABLE_LOGV){
-            Log.v(tag, message);
-        }
-    }
-    
-    private class CastShowMessageStream extends MessageStream {
-    	CastShowMessageStream() {
-    		super("HelloWorld");
-    	}
-    	
-    	@Override
-    	public void onMessageReceived(JSONObject arg0) {
-    		// TODO Auto-generated method stub
-    		
-    	}
-    	
-    	public void sendPlaySlideshow(ArrayList<String> images) {
-    		JSONObject message = new JSONObject();
-    		try {
-    			message.put("type", "queue");
-    			message.put("images", new JSONArray(images));
-    			sendMessage(message);
-    		} catch (Exception e) {
-    			
-    		}    		
-    	}
-    }
+	/**
+	 * Stores and attempts to load the passed piece of media.
+	 */
+	protected void mediaSelected(CastMedia media) {
+		this.mMedia = media;
+		updateCurrentlyPlaying();
+		if (mCommandsMessageStream != null) {
+			loadMedia();
+		}
+	}
+
+	/**
+	 * Sets the Cast Device Selection button to visible or not, depending on the
+	 * availability of devices.
+	 */
+	protected final void setMediaRouteButtonVisible() {
+		mMediaRouteButton.setVisibility(mMediaRouter.isRouteAvailable(
+				mMediaRouteSelector, 0) ? View.VISIBLE : View.GONE);
+	}
+
+	/**
+	 * Updates the status of the currently playing video in the dedicated
+	 * message view.
+	 */
+	public void updateStatus() {
+		this.runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					setMediaRouteButtonVisible();
+					updateCurrentlyPlaying();
+				} catch (Exception e) {
+					Log.e(TAG, "Status request failed: " + e);
+				}
+			}
+		});
+	}
+
+	/**
+	 * A Runnable class that updates a view to display status for the currently
+	 * playing media.
+	 */
+	private class StatusRunner implements Runnable {
+		@Override
+		public void run() {
+			while (!Thread.currentThread().isInterrupted()) {
+				try {
+					updateStatus();
+					Thread.sleep(1500);
+				} catch (Exception e) {
+					Log.e(TAG, "Thread interrupted: " + e);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Updates a view with the title of the currently playing media.
+	 */
+	protected void updateCurrentlyPlaying() {
+		String playing = "";
+		if (mMedia.getTitle() != null) {
+			playing = "Media Selected: " + mMedia.getTitle();
+			if (mCommandsMessageStream != null) {
+				String colorString = "<br><font color=#0066FF>";
+				colorString += "Casting to "
+						+ mSelectedDevice.getFriendlyName();
+				colorString += "</font>";
+				playing += colorString;
+			}
+			mCurrentlyPlaying.setText(Html.fromHtml(playing));
+		} else {
+			String castString = "<font color=#FF0000>";
+			castString += getResources().getString(R.string.tap_to_select);
+			castString += "</font>";
+			mCurrentlyPlaying.setText(Html.fromHtml(castString));
+		}
+	}
+
+	/**
+	 * Logs in verbose mode with the given tag and message, if the LOCAL_LOGV
+	 * tag is set.
+	 */
+	private void logVIfEnabled(String tag, String message) {
+		if (ENABLE_LOGV) {
+			Log.v(tag, message);
+		}
+	}
+
+	private class CastShowMessageStream extends MessageStream {
+		CastShowMessageStream() {
+			super("HelloWorld");
+		}
+
+		@Override
+		public void onMessageReceived(JSONObject arg0) {
+			// mStatus = mMessageStream.requestStatus();
+			//
+			// String currentStatus = "Player State: "
+			// + mMessageStream.getPlayerState() + "\n";
+			// currentStatus += "Device "
+			// + mSelectedDevice.getFriendlyName() + "\n";
+			// currentStatus += "Title " + mMessageStream.getTitle()
+			// + "\n";
+			// currentStatus += "Current Position: "
+			// + mMessageStream.getStreamPosition() + "\n";
+			// currentStatus += "Duration: "
+			// + mMessageStream.getStreamDuration() + "\n";
+			// currentStatus += "Volume set at: "
+			// + (mMessageStream.getVolume() * 100) + "%\n";
+			// currentStatus += "requestStatus: " + mStatus.getType()
+			// + "\n";
+			// mStatusText.setText(currentStatus);
+
+		}
+
+		public void sendPlaySlideshow(ArrayList<String> images, int delay) {
+			JSONObject message = new JSONObject();
+			try {
+				message.put("type", "queue");
+				message.put("delay", delay);
+				message.put("images", new JSONArray(images));
+				sendMessage(message);
+			} catch (Exception e) {
+
+			}
+		}
+
+		public void pause() {
+			JSONObject message = new JSONObject();
+			try {
+				message.put("type", "pause");
+				sendMessage(message);
+			} catch (Exception e) {
+
+			}
+
+		}
+
+		public void play() {
+			JSONObject message = new JSONObject();
+			try {
+				message.put("type", "play");
+				sendMessage(message);
+			} catch (Exception e) {
+
+			}
+		}
+
+		public void previous() {
+			JSONObject message = new JSONObject();
+			try {
+				message.put("type", "previous");
+				sendMessage(message);
+			} catch (Exception e) {
+
+			}
+		}
+
+		public void next() {
+			JSONObject message = new JSONObject();
+			try {
+				message.put("type", "next");
+				sendMessage(message);
+			} catch (Exception e) {
+
+			}
+		}
+	}
 }

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright (C) 2013 The Android Open Source Project
+<!--
+     Copyright (C) 2013 The Android Open Source Project
 
      Licensed under the Apache License, Version 2.0 (the "License");
      you may not use this file except in compliance with the License.
@@ -22,7 +23,7 @@
     android:orientation="vertical"
     android:paddingLeft="3dp"
     android:paddingRight="3dp"
-    tools:context=".CastShowActivity"  >
+    tools:context=".CastShowActivity" >
 
     <include
         android:id="@+id/title_bar"
@@ -38,13 +39,22 @@
         android:layout_weight="2.0"
         layout="@layout/video_player" />
 
+    <NumberPicker
+        android:id="@+id/number_picker"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight=".8"
+        android:background="@drawable/border"
+        android:gravity="center"
+        android:width="100dip" />
+
     <TextView
         android:id="@+id/currently_playing"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight=".8"
-        android:gravity="center"
         android:background="@drawable/border"
+        android:gravity="center"
         android:textColor="@color/white"
         android:textSize="20sp" />
 
