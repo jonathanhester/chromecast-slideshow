@@ -85,7 +85,6 @@ $(function() {
 		console.log(event.message);
 		if (event.message.type == "queue") {
 			delay = event.message.delay;
-			delay = 1000;
 			var runOptions;
 			if (event.message.images) {
 				runOptions = createDataWithUrls(event.message.images)
