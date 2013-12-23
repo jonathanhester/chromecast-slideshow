@@ -16,29 +16,13 @@
 
 package com.jonathanhester.cast_show;
 
-import java.util.ArrayList;
+import org.json.JSONObject;
 
 /**
  * A storage class containing the title and URL of a piece of playable media.
  */
-public class CastMedia {
+public interface CastableMedia {
 
-    private String mTitle;
-    private ArrayList<String> mImageUrls;
-
-    /**
-     * Creates a new CastMedia object for the media with the given title and URL.
-     */
-    public CastMedia(String title, ArrayList<String> imageUrls) {
-        mTitle = title;
-        mImageUrls = imageUrls;
-    }
-
-    public String getTitle() {
-        return mTitle;
-    }
-
-    public ArrayList<String> getUrls() {
-        return mImageUrls;
-    }
+    public String getTitle();
+    public void setMessage(JSONObject message);
 }

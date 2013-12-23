@@ -18,6 +18,7 @@ package com.jonathanhester.cast_show;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.http.Header;
 import org.json.JSONArray;
@@ -50,6 +51,7 @@ import com.google.cast.MediaRouteStateChangeListener;
 import com.google.cast.MessageStream;
 import com.google.cast.SessionError;
 import com.loopj.android.http.AsyncHttpClient;
+import com.loopj.android.http.AsyncHttpResponseHandler;
 import com.loopj.android.http.JsonHttpResponseHandler;
 
 /***
@@ -74,7 +76,7 @@ public class CastShowActivity extends FragmentActivity implements
 
 	private CastContext mCastContext = null;
 	private CastDevice mSelectedDevice;
-	private CastMedia mMedia;
+	private CastableMedia mMedia;
 	private ContentMetadata mMetaData;
 	private ApplicationSession mSession;
 	private CastShowMessageStream mCommandsMessageStream;
@@ -107,7 +109,7 @@ public class CastShowActivity extends FragmentActivity implements
 		setContentView(R.layout.activity_cast_sample);
 
 		mCastContext = new CastContext(getApplicationContext());
-		mMedia = new CastMedia(null, null);
+		mMedia = new CastMediaUrls(null, null);
 		mMetaData = new ContentMetadata();
 
 		mDialogFactory = new SampleMediaRouteDialogFactory();
@@ -324,7 +326,8 @@ public class CastShowActivity extends FragmentActivity implements
 				new JsonHttpResponseHandler() {
 					@Override
 					public void onSuccess(JSONObject response) {
-						ArrayList<CastMedia> shows = new ArrayList<CastMedia>();
+						final ArrayList<CastableMedia> shows = new ArrayList<CastableMedia>();
+						final ArrayList<String> picasaUsers = new ArrayList<String>();
 						try {
 							JSONArray arr = response.getJSONArray("shows");
 							JSONObject show;
@@ -337,14 +340,46 @@ public class CastShowActivity extends FragmentActivity implements
 								for (int j = 0; j < imageArr.length(); j++) {
 									images.add(imageArr.getString(j));
 								}
-								shows.add(new CastMedia(show.getString("name"),
-										images));
+								shows.add(new CastMediaUrls(show
+										.getString("name"), images));
 							}
+							arr = response.getJSONArray("users");
+							JSONObject user;
+							for (int i = 0; i < arr.length(); i++) {
+								user = arr.getJSONObject(i);
+								picasaUsers.add(user.getString("id"));
+							}
+
 						} catch (Exception e) {
 							Log.d("Exception", e.getMessage());
 						}
 
-						mMediaSelectionDialog.addShows(shows);
+						final AtomicInteger numLoaded = new AtomicInteger(0);
+						for (final String userId : picasaUsers) {
+							AsyncHttpClient client = new AsyncHttpClient();
+							Log.d("picasa", "loading " + userId);
+							client.get(
+									"https://picasaweb.google.com/data/feed/api/user/"
+											+ userId
+											+ "?kind=album&access=public",
+									new AsyncHttpResponseHandler() {
+										@Override
+										public void onSuccess(String response) {
+											numLoaded.incrementAndGet();
+											ArrayList<CastMediaAlbum> albums = new ArrayList<CastMediaAlbum>();
+											albums = PicasaResponseParser
+													.parseAlbums(response);
+											for (CastMediaAlbum album : albums) {
+												shows.add(album);
+											}
+											if (numLoaded.intValue() == picasaUsers
+													.size())
+												mMediaSelectionDialog
+														.addShows(shows);
+										}
+									});
+						}
+
 					}
 
 					@Override
@@ -465,13 +500,13 @@ public class CastShowActivity extends FragmentActivity implements
 	protected void loadMedia() {
 		mMetaData.setTitle(mMedia.getTitle());
 		int delay = mNumSeconds.getValue() * 30000;
-		mCommandsMessageStream.sendPlaySlideshow(mMedia.getUrls(), delay);
+		mCommandsMessageStream.sendPlaySlideshow(mMedia, delay);
 	}
 
 	/**
 	 * Stores and attempts to load the passed piece of media.
 	 */
-	protected void mediaSelected(CastMedia media) {
+	protected void mediaSelected(CastableMedia media) {
 		this.mMedia = media;
 		updateCurrentlyPlaying();
 		if (mCommandsMessageStream != null) {
@@ -584,12 +619,12 @@ public class CastShowActivity extends FragmentActivity implements
 
 		}
 
-		public void sendPlaySlideshow(ArrayList<String> images, int delay) {
+		public void sendPlaySlideshow(CastableMedia media, int delay) {
 			JSONObject message = new JSONObject();
 			try {
 				message.put("type", "queue");
 				message.put("delay", delay);
-				message.put("images", new JSONArray(images));
+				media.setMessage(message);
 				sendMessage(message);
 			} catch (Exception e) {
 

@@ -34,7 +34,7 @@ public class MediaAdapter extends BaseAdapter {
 
 	private Context mContext;
 	private LayoutInflater mInflater;
-	private List<CastMedia> mVideos;
+	private List<CastableMedia> mVideos;
 
 	/**
 	 * Creates a new MediaAdapter for the given activity.
@@ -43,17 +43,17 @@ public class MediaAdapter extends BaseAdapter {
 		mContext = activity.getApplicationContext();
 		mInflater = (LayoutInflater) activity
 				.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-		mVideos = new ArrayList<CastMedia>();
+		mVideos = new ArrayList<CastableMedia>();
 	}
 
 	/**
 	 * Adds some fixed set of video objects to this object's internal list.
 	 */
-	public void addVideos(List<CastMedia> shows) {
+	public void addVideos(List<CastableMedia> shows) {
 		mVideos.clear();
 		mVideos.addAll(shows);
 		// mVideos.add(new
-		// CastMedia(mContext.getString(R.string.big_buck_bunny),
+		// CastableMedia(mContext.getString(R.string.big_buck_bunny),
 		// "http://commondatastorage.googleapis.com/gtv-videos-bucket/big_buck_bunny_1080p.mp4"));
 		// mVideos.add(new
 		// CastMedia(mContext.getString(R.string.tears_of_steel),
@@ -83,7 +83,7 @@ public class MediaAdapter extends BaseAdapter {
 	}
 
 	@Override
-	public CastMedia getItem(int position) {
+	public CastableMedia getItem(int position) {
 		return mVideos.get(position);
 	}
 

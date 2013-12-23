@@ -37,7 +37,7 @@ public class MediaSelectionDialog extends Dialog {
 	private CastShowActivity mCSA;
 	private ListView mediaListView;
 	private MediaAdapter mAdapter;
-	private List<CastMedia> shows;
+	private List<CastableMedia> shows;
 
 	/**
 	 * Creates a new MediaSelectionDialog which can interact with the passed
@@ -66,7 +66,7 @@ public class MediaSelectionDialog extends Dialog {
 					public void onItemClick(AdapterView<?> a, View v,
 							int position, long id) {
 
-						CastMedia mMedia = mAdapter.getItem(position);
+						CastableMedia mMedia = mAdapter.getItem(position);
 						if (mMedia == null) {
 							return;
 						}
@@ -79,7 +79,7 @@ public class MediaSelectionDialog extends Dialog {
 				});
 	}
 
-	public void addShows(List<CastMedia> shows) {
+	public void addShows(List<CastableMedia> shows) {
 		this.shows = shows;
 		if (mAdapter != null) {
 			mAdapter.addVideos(shows);
