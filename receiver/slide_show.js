@@ -149,11 +149,11 @@ $(function() {
 	function play(runOptions, delay) {
 		var data = [];
 		var options = $.extend(globalOptions, {
-			autoplay : delay
+			autoplay : parseInt(delay)
 		});
+		$.extend(runOptions, options);
 
 		$(".messages").hide();
-		Galleria.configure(options);
 		Galleria.run('.galleria', runOptions);
 
 		Galleria.on('progress', function(e) {
